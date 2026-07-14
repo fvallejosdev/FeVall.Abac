@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="FeVall.Abac.Abstractions/FeVall.Abac.Abstractions.csproj" />
+  <Project Path="FeVall.Abac.Engine/FeVall.Abac.Engine.csproj" Id="97321661-dbe7-4c22-94ad-030f9d639290" />
+  <Project Path="FeVall.Abac.Sample/FeVall.Abac.Sample.csproj" Id="299bd95a-a996-474d-8096-d469bf3efb6d" />
+  <Project Path="FeVall.Abac.Tests/FeVall.Abac.Tests.csproj" Id="b0322cb9-3442-4fe1-82b1-d254bc8f9f4a" />
+</Solution>
