@@ -8,7 +8,7 @@ namespace FeVall.Abac.Abstractions;
 public sealed class AttributeBag
 {
     private readonly Dictionary<string, object> _attributes = [];
-
+    public AttributeBag(int capacity = 0) => _attributes = new Dictionary<string, object>(capacity);
     /// <summary>
     /// Almacena un atributo. Sobreescribe si la clave ya existe.
     /// </summary>
