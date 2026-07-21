@@ -32,6 +32,7 @@ namespace FeVall.Abac.Engine.Extensions
             RegisterOperators(services);
             services.AddSingleton<IOperatorRegistry, OperatorRegistry>();
             services.AddSingleton<IPolicyCompiler, JsonPolicyCompiler>();
+            services.AddScoped<IPolicySandbox, PolicySandbox>();   // ← nuevo, scoped porque no cachea nada
 
             // Singleton: la caché y su suscripción de fondo viven durante toda la vida de la app.
             services.AddSingleton<DynamicPolicyCache>();
