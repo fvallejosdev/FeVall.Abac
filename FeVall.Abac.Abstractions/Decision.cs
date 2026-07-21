@@ -1,4 +1,6 @@
-﻿namespace FeVall.Abac.Abstractions;
+﻿using FeVall.Abac.Abstractions.Dynamic;
+
+namespace FeVall.Abac.Abstractions;
 
 /// <summary>
 /// Resultado inmutable de una evaluación ABAC.
@@ -11,6 +13,7 @@ public sealed record Decision
     public DecisionEffect Effect { get; }
     public string? Reason { get; init; }
     public IReadOnlyList<string> Obligations { get; init; } = [];
+    public ConditionTrace? Trace { get; init; }
 
     public bool IsPermit => Effect is DecisionEffect.Permit;
     public bool IsDeny => Effect is DecisionEffect.Deny;

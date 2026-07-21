@@ -44,7 +44,7 @@ namespace FeVall.Abac.Tests.Integration
             var engine = BuildEngine(new FakePolicy("AllowAll", Decision.Permit));
             var context = BuildContext();
 
-            var decision = await engine.EvaluateAsync(context);
+            var decision = await engine.EvaluateAsync(context, CancellationToken.None);
 
             decision.IsPermit.Should().BeTrue();
         }

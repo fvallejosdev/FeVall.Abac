@@ -4,6 +4,7 @@ using FeVall.Abac.Abstractions;
 using FeVall.Abac.Abstractions.Dynamic;
 using FeVall.Abac.Engine.Dynamic.Conditions;
 
+
 namespace FeVall.Abac.Engine.Dynamic
 {
 
