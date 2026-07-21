@@ -15,11 +15,24 @@ namespace FeVall.Abac.Engine.Dynamic
     /// de atributo (AttributePathResolver.EnsureValidFormat).
     /// internal sealed: se expone únicamente a través de IPolicyCompiler.
     /// </summary>
+    // FeVall.Abac.Engine/Dynamic/JsonPolicyCompiler.cs
     internal sealed class JsonPolicyCompiler : IPolicyCompiler
     {
         private readonly IOperatorRegistry _operators;
-
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+        private static readonly HashSet<string> ValueRequiredOperators = new(StringComparer.Ordinal)
+    {
+        "Equals", "NotEquals", "GreaterThan", "LessThan", "GreaterThanOrEqual", "LessThanOrEqual",
+        "In", "NotIn", "ContainsAttribute", "NotContainsAttribute",
+        "StartsWith", "EndsWith", "ContainsText",
+        "Between", "NotBetween", "DateAfter", "DateBefore", "DateBetween"
+    };
+
+        private static readonly HashSet<string> ValidFulfillOnValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Permit", "Deny"
+    };
 
         public JsonPolicyCompiler(IOperatorRegistry operators)
         {
@@ -27,12 +40,10 @@ namespace FeVall.Abac.Engine.Dynamic
             _operators = operators;
         }
 
-        /// <summary>Punto de entrada alternativo: compila directo desde el JSON crudo de la UI.</summary>
         public IPolicy CompileFromJson(string json)
         {
             var definition = JsonSerializer.Deserialize<PolicyDefinition>(json, JsonOptions)
                 ?? throw new PolicyCompilationException("El JSON de la política no pudo deserializarse.");
-
             return Compile(definition);
         }
 
@@ -53,21 +64,38 @@ namespace FeVall.Abac.Engine.Dynamic
 
             if (string.IsNullOrWhiteSpace(definition.Name))
                 throw new PolicyCompilationException("Name es obligatorio.");
+
+            ValidateObligations(definition.Obligations);
+        }
+
+        // (4) Rechaza FulfillOn fuera de la lista blanca — evita obligaciones
+        // que nunca se disparan por un typo silencioso.
+        private static void ValidateObligations(IReadOnlyList<ObligationDefinition> obligations)
+        {
+            foreach (var obligation in obligations)
+            {
+                if (string.IsNullOrWhiteSpace(obligation.Id))
+                    throw new PolicyCompilationException("Toda Obligation debe declarar un Id.");
+
+                if (!ValidFulfillOnValues.Contains(obligation.FulfillOn))
+                    throw new PolicyCompilationException(
+                        $"La obligación '{obligation.Id}' tiene FulfillOn='{obligation.FulfillOn}' inválido. " +
+                        "Valores permitidos: 'Permit', 'Deny'.");
+            }
         }
 
         private IConditionNode BuildNode(ConditionDefinition def)
         {
-            if (def.IsLeaf)
-                return BuildLeaf(def);
+            var hasAttribute = def.Attribute is not null;
+            var hasConditions = def.Conditions.Count > 0;
 
-            if (def.Conditions.Count == 0)
+            // (1) Ambigüedad estructural: un nodo no puede ser hoja Y rama al mismo tiempo.
+            if (hasAttribute && hasConditions)
                 throw new PolicyCompilationException(
-                    "Un nodo compuesto debe declarar al menos una condición hija.");
+                    $"Nodo ambiguo: declara Attribute ('{def.Attribute}') y Conditions al mismo tiempo. " +
+                    "Un nodo debe ser una hoja (Attribute) o un nodo compuesto (Conditions), nunca ambos.");
 
-            var logicalOperator = ParseLogicalOperator(def.Operator);
-            var children = def.Conditions.Select(BuildNode).ToList();
-
-            return new CompositeConditionNode(logicalOperator, children);
+            return hasAttribute ? BuildLeaf(def) : BuildComposite(def);
         }
 
         private IConditionNode BuildLeaf(ConditionDefinition def)
@@ -76,20 +104,47 @@ namespace FeVall.Abac.Engine.Dynamic
                 throw new PolicyCompilationException(
                     $"La condición sobre '{def.Attribute}' no declara un Operator.");
 
+            // Un operador lógico (And/Or/Not) en una hoja es otra forma de la misma ambigüedad:
+            // indica que el autor quiso un nodo compuesto pero olvidó Conditions, o viceversa.
+            if (def.Operator is "And" or "Or" or "Not")
+                throw new PolicyCompilationException(
+                    $"La condición sobre '{def.Attribute}' usa el operador lógico '{def.Operator}', " +
+                    "pero los operadores lógicos solo son válidos en nodos compuestos (con Conditions, sin Attribute).");
+
             AttributePathResolver.EnsureValidFormat(def.Attribute!);
 
             var comparisonOperator = _operators.Resolve(def.Operator);
+
+            // (2) Value ausente en un operador que lo requiere — se detecta en COMPILACIÓN,
+            // no se deja para que reviente en el primer request real.
+            if (def.Value is null && ValueRequiredOperators.Contains(def.Operator))
+                throw new PolicyCompilationException(
+                    $"La condición sobre '{def.Attribute}' usa el operador '{def.Operator}', " +
+                    "que requiere un Value, pero Value es null o no fue declarado.");
+
             var expectedValue = NormalizeExpectedValue(def, comparisonOperator);
 
             return new AttributeConditionNode(def.Attribute!, comparisonOperator, expectedValue);
+        }
+
+        private IConditionNode BuildComposite(ConditionDefinition def)
+        {
+            // (3) Nodo compuesto vacío — ni Attribute ni Conditions con elementos.
+            if (def.Conditions.Count == 0)
+                throw new PolicyCompilationException(
+                    (def.Description is { Length: > 0 } desc ? $"'{desc}': " : "") +
+                    "Un nodo compuesto debe declarar al menos una condición hija, o ser una hoja con Attribute.");
+
+            var logicalOperator = ParseLogicalOperator(def.Operator);
+            var children = def.Conditions.Select(BuildNode).ToList();
+
+            return new CompositeConditionNode(logicalOperator, children);
         }
 
         private static object? NormalizeExpectedValue(ConditionDefinition def, IComparisonOperator op)
         {
             if (op.ValueIsAttributeReference)
             {
-                // El "Value" es en realidad otra ruta de atributo (ej. "Resource.ProjectId")
-                // y se sanea igual que cualquier otra ruta — no como literal.
                 var referencePath = def.Value?.ToString()
                     ?? throw new PolicyCompilationException(
                         $"El operador '{op.Name}' requiere que Value sea una ruta de atributo.");
@@ -101,8 +156,6 @@ namespace FeVall.Abac.Engine.Dynamic
             return JsonValueNormalizer.Normalize(def.Value);
         }
 
-        // "And" es el default cuando el JSON omite Operator en un nodo con Conditions
-        // (así está modelado el bloque "Target" del ejemplo de M&A).
         private static LogicalOperator ParseLogicalOperator(string? raw) => raw switch
         {
             null or "" or "And" => LogicalOperator.And,
