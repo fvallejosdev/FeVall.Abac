@@ -67,10 +67,26 @@ namespace FeVall.Abac.Engine.Extensions
             services.AddSingleton<IComparisonOperator, NotEqualsOperator>();
             services.AddSingleton<IComparisonOperator, GreaterThanOperator>();
             services.AddSingleton<IComparisonOperator, LessThanOperator>();
+            services.AddSingleton<IComparisonOperator, GreaterThanOrEqualOperator>();  
+            services.AddSingleton<IComparisonOperator, LessThanOrEqualOperator>();
             services.AddSingleton<IComparisonOperator, InOperator>();
             services.AddSingleton<IComparisonOperator, NotInOperator>();
             services.AddSingleton<IComparisonOperator, ContainsAttributeOperator>();
             services.AddSingleton<IComparisonOperator, NotContainsAttributeOperator>();
+
+            // Texto
+            services.AddSingleton<IComparisonOperator, StartsWithOperator>();    
+            services.AddSingleton<IComparisonOperator, EndsWithOperator>();      
+            services.AddSingleton<IComparisonOperator, ContainsTextOperator>();  
+
+            // Rangos numéricos
+            services.AddSingleton<IComparisonOperator, BetweenOperator>();      
+            services.AddSingleton<IComparisonOperator, NotBetweenOperator>();   
+
+            // Fechas
+            services.AddSingleton<IComparisonOperator, DateAfterOperator>();    
+            services.AddSingleton<IComparisonOperator, DateBeforeOperator>();   
+            services.AddSingleton<IComparisonOperator, DateBetweenOperator>();  
         }
     }
 }

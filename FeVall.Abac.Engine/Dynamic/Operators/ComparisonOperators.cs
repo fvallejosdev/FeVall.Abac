@@ -33,4 +33,21 @@ namespace FeVall.Abac.Engine.Dynamic.Operators
         public bool Evaluate(object? actualValue, object? expectedValue) =>
             GreaterThanOperator.ToDouble(actualValue) < GreaterThanOperator.ToDouble(expectedValue);
     }
+    internal sealed class GreaterThanOrEqualOperator : IComparisonOperator
+    {
+        public string Name => "GreaterThanOrEqual";
+        public bool ValueIsAttributeReference => false;
+
+        public bool Evaluate(object? actualValue, object? expectedValue) =>
+            GreaterThanOperator.ToDouble(actualValue) >= GreaterThanOperator.ToDouble(expectedValue);
+    }
+
+    internal sealed class LessThanOrEqualOperator : IComparisonOperator
+    {
+        public string Name => "LessThanOrEqual";
+        public bool ValueIsAttributeReference => false;
+
+        public bool Evaluate(object? actualValue, object? expectedValue) =>
+            GreaterThanOperator.ToDouble(actualValue) <= GreaterThanOperator.ToDouble(expectedValue);
+    }
 }

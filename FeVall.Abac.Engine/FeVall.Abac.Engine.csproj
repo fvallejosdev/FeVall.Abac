@@ -26,7 +26,6 @@
 
   <ItemGroup>
     <Folder Include="Dynamic\Conditions\" />
-    <Folder Include="Dynamic\Operators\" />
   </ItemGroup>
 
 </Project>
