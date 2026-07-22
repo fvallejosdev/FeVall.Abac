@@ -54,8 +54,26 @@ namespace FeVall.Abac.Engine.Dynamic
             var target = definition.Target is null ? null : BuildNode(definition.Target);
             var rule = BuildNode(definition.Rule);
 
-            return new CompiledPolicy(definition.Name, target, rule, definition.Obligations);
+            var permitObligations = BuildObligations(definition.Obligations, fulfillOn: "Permit");
+            var denyObligations = BuildObligations(definition.Obligations, fulfillOn: "Deny");
+
+            return new CompiledPolicy(definition.Name, target, rule, permitObligations, denyObligations);
         }
+
+        // Normaliza los Parameters (JsonElement → tipos CLR) UNA vez, en compilación —
+        // igual criterio de rendimiento que JsonValueNormalizer aplica a Value.
+        private static IReadOnlyList<Obligation> BuildObligations(
+            IReadOnlyList<ObligationDefinition> definitions, string fulfillOn) =>
+            definitions
+                .Where(o => string.Equals(o.FulfillOn, fulfillOn, StringComparison.OrdinalIgnoreCase))
+                .Select(o => new Obligation
+                {
+                    Id = o.Id,
+                    Parameters = o.Parameters.ToDictionary(
+                        kv => kv.Key,
+                        kv => JsonValueNormalizer.Normalize(kv.Value))
+                })
+                .ToArray();
 
         private static void ValidateShape(PolicyDefinition definition)
         {

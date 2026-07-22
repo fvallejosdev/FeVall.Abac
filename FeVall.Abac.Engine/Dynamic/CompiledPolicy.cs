@@ -14,7 +14,8 @@ namespace FeVall.Abac.Engine.Dynamic
     {
         private readonly IConditionNode? _target;
         private readonly IConditionNode _rule;
-        private readonly IReadOnlyList<ObligationDefinition> _obligations;
+        private readonly IReadOnlyList<Obligation> _permitObligations;
+        private readonly IReadOnlyList<Obligation> _denyObligations;
         private readonly bool _explainOnDeny;
 
         public string Name { get; }
@@ -23,29 +24,31 @@ namespace FeVall.Abac.Engine.Dynamic
          string name,
          IConditionNode? target,
          IConditionNode rule,
-         IReadOnlyList<ObligationDefinition> obligations,
-         bool explainOnDeny = true)   // por defecto SÍ explica — el costo es aceptable frente al valor de debug
+         IReadOnlyList<Obligation> permitObligations,
+         IReadOnlyList<Obligation> denyObligations,
+         bool explainOnDeny = true)
         {
             Name = name;
             _target = target;
             _rule = rule;
-            _obligations = obligations;
+            _permitObligations = permitObligations;
+            _denyObligations = denyObligations;
             _explainOnDeny = explainOnDeny;
         }
         public bool IsApplicableTo(IEvaluationContext context) => _target?.IsSatisfiedBy(context) ?? true;
-
         public Task<Decision> EvaluateAsync(IEvaluationContext context, CancellationToken ct = default)
         {
-            var isPermit = _rule.IsSatisfiedBy(context);   // ruta rápida, con cortocircuito — SIN cambios
+            var isPermit = _rule.IsSatisfiedBy(context);
 
             var decision = isPermit
                 ? Decision.PermitWith($"Política '{Name}': todas las condiciones de la regla se cumplieron.")
                 : BuildDenyDecision(context);
 
-            var obligationIds = CollectObligations(isPermit);
+            // Ya no hay Where/Select aquí — solo elegir cuál lista precalculada usar.
+            var obligations = isPermit ? _permitObligations : _denyObligations;
 
             return Task.FromResult(
-                obligationIds.Count == 0 ? decision : decision with { Obligations = obligationIds });
+                obligations.Count == 0 ? decision : decision with { Obligations = obligations });
         }
 
         private Decision BuildDenyDecision(IEvaluationContext context)
@@ -53,8 +56,6 @@ namespace FeVall.Abac.Engine.Dynamic
             if (!_explainOnDeny || _rule is not IExplainableConditionNode explainable)
                 return Decision.DenyWith($"Política '{Name}': la regla no se cumplió.");
 
-            // El costo de Explain (sin cortocircuito, recorre todo el árbol) se paga
-            // SOLO en el camino de Deny — el camino de Permit nunca lo toca.
             var trace = explainable.Explain(context);
             var failingLeaves = CollectFailingLeaves(trace);
 
@@ -88,12 +89,6 @@ namespace FeVall.Abac.Engine.Dynamic
                     Walk(child);
             }
         }
-
-        private IReadOnlyList<string> CollectObligations(bool isPermit) =>
-       _obligations
-           .Where(o => string.Equals(o.FulfillOn, isPermit ? "Permit" : "Deny", StringComparison.OrdinalIgnoreCase))
-           .Select(o => o.Id)
-           .ToArray();
 
     }
 }

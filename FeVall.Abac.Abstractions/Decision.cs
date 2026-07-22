@@ -12,7 +12,7 @@ public sealed record Decision
 
     public DecisionEffect Effect { get; }
     public string? Reason { get; init; }
-    public IReadOnlyList<string> Obligations { get; init; } = [];
+    public IReadOnlyList<Obligation> Obligations { get; init; } = [];
     public ConditionTrace? Trace { get; init; }
 
     public bool IsPermit => Effect is DecisionEffect.Permit;
@@ -20,17 +20,8 @@ public sealed record Decision
 
     private Decision(DecisionEffect effect) => Effect = effect;
 
-    /// <summary>
-    /// Permit con contexto adicional.
-    /// </summary>
-    public static Decision PermitWith(string reason) =>
-        Permit with { Reason = reason };
-
-    /// <summary>
-    /// Deny con razón obligatoria — siempre se debe saber por qué se denegó.
-    /// </summary>
-    public static Decision DenyWith(string reason) =>
-        Deny with { Reason = reason };
+    public static Decision PermitWith(string reason) => Permit with { Reason = reason };
+    public static Decision DenyWith(string reason) => Deny with { Reason = reason };
 }
 
 public enum DecisionEffect

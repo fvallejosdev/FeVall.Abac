@@ -4,6 +4,10 @@ namespace FeVall.Abac.Abstractions;
 /// <summary>
 /// Contenedor de atributos tipados para un participante de la evaluación.
 /// Evita Dictionary&lt;string, object&gt; crudo — el compilador atrapa errores de tipo.
+/// Anidamiento: para modelar estructura jerárquica (ej. Resource.Owner.Department),
+/// almacena otro AttributeBag como valor bajo una clave (Set("Owner", ownerBag)).
+/// AttributePathResolver camina estos niveles sin reflexión — cada segmento
+/// intermedio DEBE ser un AttributeBag, o la ruta se trata como atributo ausente.
 /// </summary>
 public sealed class AttributeBag
 {
