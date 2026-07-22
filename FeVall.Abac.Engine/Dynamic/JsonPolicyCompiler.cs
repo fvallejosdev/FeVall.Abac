@@ -124,7 +124,7 @@ namespace FeVall.Abac.Engine.Dynamic
 
             var expectedValue = NormalizeExpectedValue(def, comparisonOperator);
 
-            return new AttributeConditionNode(def.Attribute!, comparisonOperator, expectedValue);
+            return new AttributeConditionNode(def.Attribute!, comparisonOperator, expectedValue, def.Description);
         }
 
         private IConditionNode BuildComposite(ConditionDefinition def)
@@ -138,7 +138,7 @@ namespace FeVall.Abac.Engine.Dynamic
             var logicalOperator = ParseLogicalOperator(def.Operator);
             var children = def.Conditions.Select(BuildNode).ToList();
 
-            return new CompositeConditionNode(logicalOperator, children);
+            return new CompositeConditionNode(logicalOperator, children, def.Description);
         }
 
         private static object? NormalizeExpectedValue(ConditionDefinition def, IComparisonOperator op)

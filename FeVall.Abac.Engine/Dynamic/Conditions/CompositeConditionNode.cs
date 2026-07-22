@@ -21,7 +21,10 @@ namespace FeVall.Abac.Engine.Dynamic.Conditions
         private readonly IReadOnlyList<IConditionNode> _children;
         private readonly string? _description;
 
-        public CompositeConditionNode(LogicalOperator @operator, IReadOnlyList<IConditionNode> children)
+        public CompositeConditionNode(
+             LogicalOperator @operator,
+             IReadOnlyList<IConditionNode> children,
+             string? description = null)
         {
             if (@operator is LogicalOperator.Not && children.Count != 1)
                 throw new PolicyCompilationException(
@@ -29,6 +32,7 @@ namespace FeVall.Abac.Engine.Dynamic.Conditions
 
             _operator = @operator;
             _children = children;
+            _description = description;
         }
 
         public bool IsSatisfiedBy(IEvaluationContext context) => _operator switch
@@ -41,12 +45,7 @@ namespace FeVall.Abac.Engine.Dynamic.Conditions
 
         public ConditionTrace Explain(IEvaluationContext context)
         {
-            // Deliberado: NO cortocircuita. Evalúa todos los hijos para que el usuario
-            // vea el panorama completo (ej. "estas 2 de 3 condiciones fallaron"),
-            // no solo la primera que ya definió el resultado.
-            var childTraces = _children
-                .Select(child => ExplainChild(child, context))
-                .ToList();
+            var childTraces = _children.Select(child => ExplainChild(child, context)).ToList();
 
             var isSatisfied = _operator switch
             {
@@ -77,5 +76,6 @@ namespace FeVall.Abac.Engine.Dynamic.Conditions
                     IsSatisfied = child.IsSatisfiedBy(context),
                     Description = "Nodo no explicable (IConditionNode custom sin IExplainableConditionNode)."
                 };
+    
     }
 }
