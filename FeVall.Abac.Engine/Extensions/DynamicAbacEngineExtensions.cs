@@ -32,8 +32,19 @@ namespace FeVall.Abac.Engine.Extensions
             RegisterOperators(services);
             services.AddSingleton<IOperatorRegistry, OperatorRegistry>();
             services.AddSingleton<IPolicyCompiler, JsonPolicyCompiler>();
-            services.AddScoped<IPolicySandbox, PolicySandbox>();   // ← nuevo, scoped porque no cachea nada
+            // Si el consumidor registró IPolicyVersionStore, montamos IPolicyRepository
+            // sobre él automáticamente (a menos que ya haya registrado su propio
+            // IPolicyRepository directo — ese caso sigue siendo válido para quien
+            // no necesite versionado).
+            if (services.Any(s => s.ServiceType == typeof(IPolicyVersionStore)) &&
+                !services.Any(s => s.ServiceType == typeof(IPolicyRepository)))
+            {
+                services.AddSingleton<IPolicyRepository, VersionedPolicyRepository>();
+                services.AddScoped<PolicyPublishingService>();
+            }
 
+
+            services.AddScoped<IPolicySandbox, PolicySandbox>();  // ← nuevo, scoped porque no cachea nada
             // Singleton: la caché y su suscripción de fondo viven durante toda la vida de la app.
             services.AddSingleton<DynamicPolicyCache>();
             services.AddSingleton<IPolicyProvider>(sp => sp.GetRequiredService<DynamicPolicyCache>());

@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
+﻿
+// FeVall.Abac.Abstractions/Dynamic/ConditionTrace.cs
 namespace FeVall.Abac.Abstractions.Dynamic
 {
     /// <summary>
