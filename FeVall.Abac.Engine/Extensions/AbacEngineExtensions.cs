@@ -1,5 +1,7 @@
 ﻿// FeVall.Abac.Engine/Extensions/AbacEngineExtensions.cs
 using FeVall.Abac.Abstractions;
+using FeVall.Abac.Abstractions.Audit;
+using FeVall.Abac.Engine.Audit;
 using FeVall.Abac.Engine.Logging;
 using FeVall.Abac.Engine.Strategies;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +32,7 @@ public static class AbacEngineExtensions
         services.AddSingleton(options);
 
         RegisterLogger(services);
+        RegisterAuditSink(services);
         RegisterStrategy(services, options);
         RegisterEvaluator(services);
         RegisterEngine(services);
@@ -88,4 +91,16 @@ public static class AbacEngineExtensions
 
     private static void RegisterEngine(IServiceCollection services) =>
         services.AddScoped<IAbacEngine, AbacEngine>();
+
+    private static void RegisterAuditSink(IServiceCollection services)
+    {
+        // Mismo criterio que RegisterStrategy: si el consumidor ya registró
+        // IAuditSink (llamando AddAsyncAuditLog() antes O después de AddAbacEngine),
+        // se respeta esa elección — el orden entre ambas llamadas deja de importar,
+        // a diferencia del reemplazo "última wins" que usa IPolicyEvaluator.
+        if (services.Any(s => s.ServiceType == typeof(IAuditSink)))
+            return;
+
+        services.AddSingleton<IAuditSink, NullAuditSink>();
+    }
 }

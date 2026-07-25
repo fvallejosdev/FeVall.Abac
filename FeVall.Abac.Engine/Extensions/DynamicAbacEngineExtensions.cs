@@ -61,7 +61,16 @@ namespace FeVall.Abac.Engine.Extensions
             return services;
         }
 
-        /// <summary>Habilita la cola de auditoría no bloqueante. Requiere IAuditBatchWriter registrado.</summary>
+        /// <summary>
+        /// Habilita la cola de auditoría no bloqueante y la conecta automáticamente
+        /// a AbacEngine (que ya invoca IAuditSink.WriteAsync tras cada decisión).
+        /// Requiere IAuditBatchWriter registrado por el consumidor.
+        /// Puede llamarse antes O después de AddAbacEngine() — RegisterAuditSink()
+        /// solo aplica un NullAuditSink por defecto si ningún IAuditSink fue
+        /// registrado todavía, así que el orden no importa (a diferencia de
+        /// AddDynamicAbacPolicies(), que sí debe llamarse después de AddAbacEngine
+        /// por el reemplazo de IPolicyEvaluator).
+        /// </summary>
         public static IServiceCollection AddAsyncAuditLog(this IServiceCollection services, int channelCapacity = 10_000)
         {
             services.AddSingleton(new ChannelAuditSink(channelCapacity));

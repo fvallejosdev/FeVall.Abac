@@ -66,4 +66,12 @@ public sealed class AttributeBag
     /// Claves actualmente almacenadas. Útil para logging y diagnóstico.
     /// </summary>
     public IReadOnlyCollection<string> Keys => _attributes.Keys;
+
+    /// <summary>
+    /// Copia de solo lectura de todos los atributos almacenados. Pensado para
+    /// diagnóstico y resúmenes (ej. auditoría) — NUNCA para lógica de evaluación,
+    /// que debe seguir usando Get&lt;T&gt;/GetRequired&lt;T&gt; tipados.
+    /// Copia defensiva: mutar el resultado no afecta al AttributeBag original.
+    /// </summary>
+    public IReadOnlyDictionary<string, object> Snapshot() => new Dictionary<string, object>(_attributes);
 }
