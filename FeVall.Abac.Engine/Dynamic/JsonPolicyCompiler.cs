@@ -1,8 +1,9 @@
 // FeVall.Abac.Engine/Dynamic/JsonPolicyCompiler.cs
-using System.Text.Json;
 using FeVall.Abac.Abstractions;
 using FeVall.Abac.Abstractions.Dynamic;
 using FeVall.Abac.Engine.Dynamic.Conditions;
+using FeVall.Abac.Engine.Extensions;
+using System.Text.Json;
 
 
 namespace FeVall.Abac.Engine.Dynamic
@@ -19,35 +20,38 @@ namespace FeVall.Abac.Engine.Dynamic
     internal sealed class JsonPolicyCompiler : IPolicyCompiler
     {
         private readonly IOperatorRegistry _operators;
+        private readonly AbacEngineOptions _options;
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
         private static readonly HashSet<string> ValueRequiredOperators = new(StringComparer.Ordinal)
-    {
-        "Equals", "NotEquals", "GreaterThan", "LessThan", "GreaterThanOrEqual", "LessThanOrEqual",
-        "In", "NotIn", "ContainsAttribute", "NotContainsAttribute",
-        "StartsWith", "EndsWith", "ContainsText",
-        "Between", "NotBetween", "DateAfter", "DateBefore", "DateBetween"
-    };
+        {
+            "Equals", "NotEquals", "GreaterThan", "LessThan", "GreaterThanOrEqual", "LessThanOrEqual",
+            "In", "NotIn", "ContainsAttribute", "NotContainsAttribute",
+            "StartsWith", "EndsWith", "ContainsText",
+            "Between", "NotBetween", "DateAfter", "DateBefore", "DateBetween"
+        };
 
         private static readonly HashSet<string> ValidFulfillOnValues = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Permit", "Deny"
-    };
+        {
+            "Permit", "Deny"
+        };
 
-        public JsonPolicyCompiler(IOperatorRegistry operators)
+        public JsonPolicyCompiler(IOperatorRegistry operators, AbacEngineOptions options)
         {
             ArgumentNullException.ThrowIfNull(operators);
+            ArgumentNullException.ThrowIfNull(options);
             _operators = operators;
+            _options = options;
         }
 
-        public IPolicy CompileFromJson(string json)
+        public IPolicy CompileFromJson(string json, bool? explainOnDeny = null)
         {
             var definition = JsonSerializer.Deserialize<PolicyDefinition>(json, JsonOptions)
                 ?? throw new PolicyCompilationException("El JSON de la política no pudo deserializarse.");
-            return Compile(definition);
+            return Compile(definition, explainOnDeny);
         }
 
-        public IPolicy Compile(PolicyDefinition definition)
+        public IPolicy Compile(PolicyDefinition definition, bool? explainOnDeny = null)
         {
             ValidateShape(definition);
 
@@ -57,7 +61,14 @@ namespace FeVall.Abac.Engine.Dynamic
             var permitObligations = BuildObligations(definition.Obligations, fulfillOn: "Permit");
             var denyObligations = BuildObligations(definition.Obligations, fulfillOn: "Deny");
 
-            return new CompiledPolicy(definition.Name, target, rule, permitObligations, denyObligations);
+            // Si el llamador no fuerza un valor (ej. PolicySandbox sí lo fuerza a true),
+            // se respeta la configuración de producción: solo se paga el costo de
+            // Explain (recorrido completo del árbol sin cortocircuito) cuando el
+            // consumidor activó logging detallado.
+            var effectiveExplainOnDeny = explainOnDeny ?? _options.EnableDetailedLogging;
+
+            return new CompiledPolicy(
+                definition.Name, target, rule, permitObligations, denyObligations, effectiveExplainOnDeny);
         }
 
         // Normaliza los Parameters (JsonElement → tipos CLR) UNA vez, en compilación —

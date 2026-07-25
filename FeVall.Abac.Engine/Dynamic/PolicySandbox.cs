@@ -30,7 +30,10 @@ namespace FeVall.Abac.Engine.Dynamic
             IPolicy compiled;
             try
             {
-                compiled = _compiler.Compile(definition);
+                // Se fuerza explainOnDeny: true — el usuario probando una política en la UI
+                // necesita ver el árbol completo de diagnóstico sin importar si
+                // AbacEngineOptions.EnableDetailedLogging está desactivado en producción.
+                compiled = _compiler.Compile(definition, explainOnDeny: true);
             }
             catch (PolicyCompilationException ex)
             {
