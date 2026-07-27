@@ -182,7 +182,27 @@ namespace FeVall.Abac.Engine.Dynamic
                 return referencePath;
             }
 
-            return JsonValueNormalizer.Normalize(def.Value);
+            var normalized = JsonValueNormalizer.Normalize(def.Value);
+
+            // Validación de FORMA en compilación (conteo de elementos, min<=max,
+            // parseabilidad numérica/fecha) — solo para operadores que la declaran
+            // (Between, NotBetween, DateBetween hoy; OCP: cualquier operador futuro
+            // que implemente IValueValidatingOperator queda cubierto automáticamente
+            // sin tocar este método de nuevo).
+            if (op is IValueValidatingOperator validating)
+            {
+                try
+                {
+                    validating.ValidateValueShape(normalized);
+                }
+                catch (Exception ex)
+                {
+                    throw new PolicyCompilationException(
+                        $"Value inválido para el operador '{op.Name}': {ex.Message}", ex);
+                }
+            }
+
+            return normalized;
         }
 
         private static LogicalOperator ParseLogicalOperator(string? raw) => raw switch

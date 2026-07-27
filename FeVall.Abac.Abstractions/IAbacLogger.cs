@@ -31,4 +31,14 @@ public interface IAbacLogger
     /// Llamado por PolicyEvaluator cuando IPolicyApplicability retorna false.
     /// </summary>
     void LogPolicySkipped(IPolicy policy, IEvaluationContext context);
+
+    /// <summary>
+    /// Registra un fallo de infraestructura no atado a una política ni a una
+    /// decisión concreta (ej. pérdida de conexión del stream de invalidación
+    /// multi-pod en DynamicPolicyCache). Método con implementación default vacía
+    /// para no romper binariamente a consumidores que ya implementaron IAbacLogger
+    /// antes de que este método existiera — quien quiera visibilidad real de estos
+    /// fallos lo sobreescribe explícitamente.
+    /// </summary>
+    void LogInfrastructureFault(string component, Exception exception) { }
 }

@@ -27,6 +27,9 @@ namespace FeVall.Abac.Engine.Dynamic
         private readonly Task _listenerTask;
         private volatile bool _isLoaded;
 
+        private static readonly TimeSpan MinReconnectDelay = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan MaxReconnectDelay = TimeSpan.FromSeconds(30);
+
         public DynamicPolicyCache(
             IPolicyRepository repository,
             IPolicyCompiler compiler,
@@ -95,31 +98,70 @@ namespace FeVall.Abac.Engine.Dynamic
 
         private IPolicy Wrap(IPolicy compiled) => new FaultTolerantPolicyDecorator(compiled, _logger);
 
+        /// <summary>
+        /// Se suscribe a invalidaciones y, si el STREAM COMPLETO se cae (no solo
+        /// el manejo de un policyId individual — eso ya lo cubre el try/catch
+        /// interno), reintenta la suscripción con backoff exponencial acotado en
+        /// vez de dejar morir la tarea de fondo silenciosamente. Sin esto, un pod
+        /// que pierde la conexión a la infraestructura de pub/sub (Redis, etc.)
+        /// queda sordo a invalidaciones de forma PERMANENTE hasta un reinicio manual —
+        /// justo el escenario que IPolicyChangeNotifier existe para resolver.
+        /// </summary>
         private async Task ListenForInvalidationsAsync(IPolicyChangeNotifier notifier, CancellationToken ct)
         {
-            try
-            {
-                await foreach (var policyId in notifier.Subscribe(ct).WithCancellation(ct))
-                {
-                    try
-                    {
-                        var fresh = await _repository.GetByIdAsync(policyId, ct);
+            var delay = MinReconnectDelay;
 
-                        if (fresh is null)
-                            _cache.TryRemove(policyId, out _);
-                        else
-                            TryCompileAndCache(fresh);
-                    }
-                    catch (Exception) when (!ct.IsCancellationRequested)
-                    {
-                        // Fail-safe: si la recompilación falla, se conserva la versión anterior
-                        // en caché en lugar de dejar el sistema sin esa política.
-                    }
-                }
-            }
-            catch (OperationCanceledException)
+            while (!ct.IsCancellationRequested)
             {
-                // Apagado normal del servicio — no es un error.
+                try
+                {
+                    await foreach (var policyId in notifier.Subscribe(ct).WithCancellation(ct))
+                    {
+                        delay = MinReconnectDelay; // Conexión sana: se resetea el backoff.
+
+                        try
+                        {
+                            var fresh = await _repository.GetByIdAsync(policyId, ct);
+
+                            if (fresh is null)
+                                _cache.TryRemove(policyId, out _);
+                            else
+                                TryCompileAndCache(fresh);
+                        }
+                        catch (Exception) when (!ct.IsCancellationRequested)
+                        {
+                            // Fail-safe: si la recompilación de ESTA política falla,
+                            // se conserva la versión anterior en caché — no afecta
+                            // al stream de suscripción en sí.
+                        }
+                    }
+
+                    // El stream terminó sin excepción (ej. el servidor cerró la
+                    // conexión de forma ordenada) — se trata igual que una caída:
+                    // se reintenta, porque el listener debe vivir mientras viva la caché.
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    return; // Apagado normal del servicio — no es un error.
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogInfrastructureFault(nameof(DynamicPolicyCache), ex);
+                }
+
+                if (ct.IsCancellationRequested) return;
+
+                try
+                {
+                    await Task.Delay(delay, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                // Backoff exponencial acotado: 1s, 2s, 4s, 8s, 16s, 30s, 30s...
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, MaxReconnectDelay.TotalSeconds));
             }
         }
 

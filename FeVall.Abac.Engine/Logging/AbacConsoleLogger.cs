@@ -61,4 +61,16 @@ internal sealed class AbacConsoleLogger : IAbacLogger
             "[ABAC] Política omitida: {Policy} — No aplica al contexto.",
             policy.Name);
     }
+
+    public void LogInfrastructureFault(string component, Exception exception)
+    {
+        // Siempre Warning o superior — a diferencia del resto de los logs de este
+        // logger (Debug), un fallo de infraestructura debe ser visible por defecto,
+        // no requerir que el consumidor active logging detallado para enterarse.
+        _logger.LogWarning(
+            exception,
+            "[ABAC] Fallo de infraestructura en {Component}: {Message}",
+            component,
+            exception.Message);
+    }
 }

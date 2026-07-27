@@ -6,15 +6,18 @@ namespace FeVall.Abac.Engine.Dynamic.Operators
 {
     /// <summary>
     /// Operador "Between": el Value esperado es un array literal de exactamente
-    /// dos elementos [min, max] (inclusive en ambos extremos), ej.:
-    /// { "Attribute": "Resource.Amount", "Operator": "Between", "Value": [1000, 50000] }
-    /// Reutiliza GreaterThanOperator.ToDouble — mismo criterio fail-closed ante
-    /// atributos ausentes o no numéricos.
+    /// dos elementos [min, max] (inclusive en ambos extremos).
+    /// Implementa IValueValidatingOperator: la forma del Value (2 elementos,
+    /// numéricos, min &lt;= max) se valida en Compile(), no en cada Evaluate() —
+    /// mismo criterio fail-fast que el resto de la validación de forma en
+    /// JsonPolicyCompiler (Value ausente, operador lógico en hoja, etc.).
     /// </summary>
-    internal sealed class BetweenOperator : IComparisonOperator
+    internal sealed class BetweenOperator : IValueValidatingOperator
     {
         public string Name => "Between";
         public bool ValueIsAttributeReference => false;
+
+        public void ValidateValueShape(object? normalizedValue) => ExtractBounds(normalizedValue);
 
         public bool Evaluate(object? actualValue, object? expectedValue)
         {
@@ -45,10 +48,12 @@ namespace FeVall.Abac.Engine.Dynamic.Operators
         }
     }
 
-    internal sealed class NotBetweenOperator : IComparisonOperator
+    internal sealed class NotBetweenOperator : IValueValidatingOperator
     {
         public string Name => "NotBetween";
         public bool ValueIsAttributeReference => false;
+
+        public void ValidateValueShape(object? normalizedValue) => BetweenOperator.ExtractBounds(normalizedValue);
 
         public bool Evaluate(object? actualValue, object? expectedValue)
         {

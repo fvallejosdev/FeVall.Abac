@@ -48,14 +48,13 @@ namespace FeVall.Abac.Engine.Dynamic.Operators
 
     /// <summary>
     /// "DateBetween": Value es [desde, hasta] en ISO 8601, ambos inclusive.
-    /// Ej.: { "Attribute": "Environment.RequestTime", "Operator": "DateBetween",
-    ///        "Value": ["2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"] }
+    /// Implementa IValueValidatingOperator: mismo criterio fail-fast que BetweenOperator.
     /// </summary>
-    /// 
-    internal sealed class DateBetweenOperator : IComparisonOperator
+    internal sealed class DateBetweenOperator : IValueValidatingOperator
     {
         public string Name => "DateBetween";
         public bool ValueIsAttributeReference => false;
+        public void ValidateValueShape(object? normalizedValue) => ExtractRange(normalizedValue);
 
         public bool Evaluate(object? actualValue, object? expectedValue)
         {
