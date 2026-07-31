@@ -7,6 +7,7 @@ using FeVall.Abac.Engine; // NullGuardPolicyEvaluator (internal, mismo ensamblad
 using FeVall.Abac.Engine.Dynamic;
 using FeVall.Abac.Engine.Dynamic.Operators;
 using Microsoft.Extensions.DependencyInjection;
+using PolicyPublishingService = FeVall.Abac.Abstractions.Dynamic.PolicyPublishingService;
 
 namespace FeVall.Abac.Engine.Extensions
 {
@@ -32,33 +33,42 @@ namespace FeVall.Abac.Engine.Extensions
             RegisterOperators(services);
             services.AddSingleton<IOperatorRegistry, OperatorRegistry>();
             services.AddSingleton<IPolicyCompiler, JsonPolicyCompiler>();
-            // Si el consumidor registró IPolicyVersionStore, montamos IPolicyRepository
-            // sobre él automáticamente (a menos que ya haya registrado su propio
-            // IPolicyRepository directo — ese caso sigue siendo válido para quien
-            // no necesite versionado).
-            if (services.Any(s => s.ServiceType == typeof(IPolicyVersionStore)) &&
-                !services.Any(s => s.ServiceType == typeof(IPolicyRepository)))
-            {
-                services.AddSingleton<IPolicyRepository, VersionedPolicyRepository>();
-                services.AddScoped<PolicyPublishingService>();
-            }
 
+            RegisterVersioning(services);
 
-            services.AddScoped<IPolicySandbox, PolicySandbox>();  // ← nuevo, scoped porque no cachea nada
-            // Singleton: la caché y su suscripción de fondo viven durante toda la vida de la app.
+            services.AddScoped<IPolicySandbox, PolicySandbox>();
             services.AddSingleton<DynamicPolicyCache>();
             services.AddSingleton<IPolicyProvider>(sp => sp.GetRequiredService<DynamicPolicyCache>());
 
-            // Sustituye el registro de IPolicyEvaluator hecho por AddAbacEngine: en
-            // Microsoft.Extensions.DependencyInjection, la última registración de una
-            // interfaz es la que se resuelve por inyección de constructor, así que este
-            // registro posterior reemplaza al PolicyEvaluator/NullGuardPolicyEvaluator
-            // por defecto sin tener que tocar AbacEngineExtensions.
             services.AddScoped<ShortCircuitPolicyEvaluator>();
             services.AddScoped<IPolicyEvaluator>(sp =>
                 new NullGuardPolicyEvaluator(sp.GetRequiredService<ShortCircuitPolicyEvaluator>()));
 
             return services;
+        }
+        /// <summary>
+        /// Registra dos capacidades INDEPENDIENTES entre sí, cada una condicionada
+        /// a su propio requisito — antes ambas estaban acopladas a "no exista ya
+        /// un IPolicyRepository", lo cual bloqueaba PolicyPublishingService para
+        /// cualquier consumidor que hubiera registrado su propio IPolicyRepository
+        /// (ej. una vista de lectura optimizada) pero SÍ quisiera versionado.
+        /// </summary>
+        private static void RegisterVersioning(IServiceCollection services)
+        {
+            var hasVersionStore = services.Any(s => s.ServiceType == typeof(IPolicyVersionStore));
+            if (!hasVersionStore) return;
+
+            // 1) IPolicyRepository derivado del versionado — SOLO si el consumidor
+            //    no registró ya el suyo. "DynamicPolicyCache lee de aquí" es un
+            //    concepto distinto de "cómo se publica/versiona".
+            if (!services.Any(s => s.ServiceType == typeof(IPolicyRepository)))
+                services.AddSingleton<IPolicyRepository, VersionedPolicyRepository>();
+
+            // 2) PolicyPublishingService — disponible SIEMPRE que haya
+            //    IPolicyVersionStore, sin importar si el consumidor trajo su propio
+            //    IPolicyRepository para lectura. Publicar/revertir opera sobre el
+            //    version store directamente, nunca a través de IPolicyRepository.
+            services.AddScoped<PolicyPublishingService>();
         }
 
         /// <summary>

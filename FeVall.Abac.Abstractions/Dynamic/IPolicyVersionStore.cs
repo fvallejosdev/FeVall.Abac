@@ -11,7 +11,17 @@ namespace FeVall.Abac.Abstractions.Dynamic
     /// </summary>
     public interface IPolicyVersionStore
     {
-        /// <summary>Agrega una nueva versión al historial. Nunca sobreescribe una existente.</summary>
+        /// <summary>
+        /// Agrega una nueva versión al historial. Nunca sobreescribe una existente.
+        /// CONTRATO DE CONCURRENCIA: la implementación DEBE garantizar unicidad de
+        /// (PolicyId, Version) — típicamente vía un constraint único a nivel de
+        /// almacenamiento (SQL UNIQUE INDEX, condición de escritura en Mongo, etc.).
+        /// Ante una colisión (dos llamadas concurrentes con el mismo PolicyId+Version),
+        /// DEBE lanzar PolicyVersionConflictException. PolicyPublishingService depende
+        /// de esta excepción específica para reintentar automáticamente — una
+        /// implementación que trague la colisión o lance una excepción genérica
+        /// rompe ese mecanismo de reintento.
+        /// </summary>
         Task AppendAsync(PolicyVersion version, CancellationToken ct = default);
 
         /// <summary>Historial completo de una política, ordenado por Version descendente (más reciente primero).</summary>
