@@ -71,16 +71,19 @@ namespace FeVall.Abac.Engine.Extensions
             services.AddScoped<PolicyPublishingService>();
         }
 
-        /// <summary>
-        /// Habilita la cola de auditoría no bloqueante y la conecta automáticamente
-        /// a AbacEngine (que ya invoca IAuditSink.WriteAsync tras cada decisión).
-        /// Requiere IAuditBatchWriter registrado por el consumidor.
-        /// Puede llamarse antes O después de AddAbacEngine() — RegisterAuditSink()
-        /// solo aplica un NullAuditSink por defecto si ningún IAuditSink fue
-        /// registrado todavía, así que el orden no importa (a diferencia de
-        /// AddDynamicAbacPolicies(), que sí debe llamarse después de AddAbacEngine
-        /// por el reemplazo de IPolicyEvaluator).
-        /// </summary>
+       /// <summary>
+         /// Habilita la cola de auditoría no bloqueante y la conecta automáticamente
+         /// a AbacEngine (que ya invoca IAuditSink.WriteAsync tras cada decisión).
+         /// Requiere IAuditBatchWriter registrado por el consumidor.
+        /// Requiere también que AddAbacEngine() haya sido llamado en algún punto
+        /// (antes o después) para que IAbacLogger esté disponible — AuditPersistenceWorker
+        /// lo usa para registrar fallos de infraestructura del writer sin morir.
+         /// Puede llamarse antes O después de AddAbacEngine() — RegisterAuditSink()
+         /// solo aplica un NullAuditSink por defecto si ningún IAuditSink fue
+         /// registrado todavía, así que el orden no importa (a diferencia de
+         /// AddDynamicAbacPolicies(), que sí debe llamarse después de AddAbacEngine
+         /// por el reemplazo de IPolicyEvaluator).
+         /// </summary>
         public static IServiceCollection AddAsyncAuditLog(this IServiceCollection services, int channelCapacity = 10_000)
         {
             services.AddSingleton(new ChannelAuditSink(channelCapacity));
