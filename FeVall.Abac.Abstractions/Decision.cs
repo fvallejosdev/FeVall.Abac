@@ -1,4 +1,5 @@
-﻿using FeVall.Abac.Abstractions.Dynamic;
+﻿// FeVall.Abac.Abstractions/Decision.cs
+using FeVall.Abac.Abstractions.Dynamic;
 
 namespace FeVall.Abac.Abstractions;
 
