@@ -92,7 +92,20 @@ namespace FeVall.Abac.Engine.Dynamic
                 _logger.LogPolicySkipped(
                     new UncompilablePolicyPlaceholder(definition.PolicyId),
                     EmptyContextForLogging.Instance);
-                _ = ex; // la razón ya quedó en el mensaje de la excepción, disponible para logging externo
+                _ = ex;
+            }
+            catch (Exception ex)
+            {
+                // Ensanchado deliberadamente más allá de PolicyCompilationException:
+                // un operador custom mal implementado, o cualquier fallo inesperado
+                // durante Compile(), NO debe tumbar la carga completa de EnsureLoadedAsync.
+                // Mismo criterio de aislamiento fail-safe que FaultTolerantPolicyDecorator
+                // aplica en tiempo de EVALUACIÓN — aquí se aplica en tiempo de COMPILACIÓN/CARGA.
+                // Se registra como fallo de infraestructura porque, a diferencia de un
+                // PolicyCompilationException (error de negocio esperable del usuario en la UI),
+                // esto es un fallo técnico no previsto que sí amerita visibilidad por defecto.
+                _logger.LogInfrastructureFault(
+                    $"{nameof(DynamicPolicyCache)}.{nameof(TryCompileAndCache)}({definition.PolicyId})", ex);
             }
         }
 
