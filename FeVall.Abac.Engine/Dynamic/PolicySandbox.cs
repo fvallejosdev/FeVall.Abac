@@ -1,8 +1,6 @@
 ﻿using FeVall.Abac.Abstractions;
 using FeVall.Abac.Abstractions.Dynamic;
-using System;
-using System.Collections.Generic;
-using System.Text;
+
 // FeVall.Abac.Engine/Dynamic/PolicySandbox.cs
 namespace FeVall.Abac.Engine.Dynamic
 {
@@ -11,6 +9,10 @@ namespace FeVall.Abac.Engine.Dynamic
     /// FaultTolerantPolicyDecorator: en el sandbox el usuario quiere ver el error
     /// real (stack, mensaje técnico), no un Deny genérico fail-closed — ese
     /// comportamiento fail-closed es correcto en producción, no aquí.
+    /// Genuinamente async: TestAsync/EvaluateCaseAsync usan await en toda la
+    /// cadena — nunca bloquean un hilo del thread pool con .GetAwaiter().GetResult(),
+    /// evitando tanto el desperdicio de paralelismo bajo carga como el riesgo de
+    /// deadlock si IPolicy.EvaluateAsync deja de ser síncrono en el futuro.
     /// internal sealed: se expone únicamente vía IPolicySandbox.
     /// </summary>
     internal sealed class PolicySandbox : IPolicySandbox
@@ -22,10 +24,22 @@ namespace FeVall.Abac.Engine.Dynamic
             ArgumentNullException.ThrowIfNull(compiler);
             _compiler = compiler;
         }
+
         public Task<PolicyTestReport> TestAsync(
             PolicyDefinition definition,
             IReadOnlyList<IEvaluationContext> testCases,
             CancellationToken ct = default)
+        {
+            // Delega a la versión async real — el retorno Task<T> se conserva
+            // para no romper la firma de IPolicySandbox, pero el cuerpo ya no
+            // bloquea ningún hilo del pool.
+            return TestAsyncCore(definition, testCases, ct);
+        }
+
+        private async Task<PolicyTestReport> TestAsyncCore(
+            PolicyDefinition definition,
+            IReadOnlyList<IEvaluationContext> testCases,
+            CancellationToken ct)
         {
             IPolicy compiled;
             try
@@ -37,34 +51,34 @@ namespace FeVall.Abac.Engine.Dynamic
             }
             catch (PolicyCompilationException ex)
             {
-                return Task.FromResult(new PolicyTestReport
+                return new PolicyTestReport
                 {
                     CompiledSuccessfully = false,
                     CompilationError = ex.Message
-                });
+                };
             }
 
             var results = new List<PolicyTestCaseResult>(testCases.Count);
             for (var i = 0; i < testCases.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                results.Add(EvaluateCase(compiled, testCases[i], i, ct));
+                results.Add(await EvaluateCaseAsync(compiled, testCases[i], i, ct));
             }
 
-            return Task.FromResult(new PolicyTestReport
+            return new PolicyTestReport
             {
                 CompiledSuccessfully = true,
                 CaseResults = results
-            });
+            };
         }
 
-        private static PolicyTestCaseResult EvaluateCase(
-           IPolicy compiled, IEvaluationContext context, int index, CancellationToken ct)
+        private static async Task<PolicyTestCaseResult> EvaluateCaseAsync(
+            IPolicy compiled, IEvaluationContext context, int index, CancellationToken ct)
         {
             try
             {
-                // CompiledPolicy ya expone Trace en la Decision (ver #1) — lo reutilizamos tal cual.
-                var decision = compiled.EvaluateAsync(context, ct).GetAwaiter().GetResult();
+                // CompiledPolicy ya expone Trace en la Decision — lo reutilizamos tal cual.
+                var decision = await compiled.EvaluateAsync(context, ct);
 
                 return new PolicyTestCaseResult
                 {
