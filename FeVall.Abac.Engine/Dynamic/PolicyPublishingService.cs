@@ -1,5 +1,6 @@
 ﻿// FeVall.Abac.Engine/Dynamic/PolicyPublishingService.cs
 using FeVall.Abac.Abstractions.Dynamic;
+using System.Diagnostics;
 
 namespace FeVall.Abac.Engine.Dynamic
 {
@@ -101,10 +102,10 @@ namespace FeVall.Abac.Engine.Dynamic
         /// Calcula la próxima versión y hace AppendAsync. Si otra publicación
         /// concurrente ganó la carrera (PolicyVersionConflictException), vuelve
         /// a leer GetLatestAsync y reintenta con la versión recalculada — hasta
-        /// MaxConflictRetries veces. Si el límite se agota, se deja que la excepción
-        /// suba en el intento final — un choque tan persistente probablemente indica
-        /// un problema más profundo (bug en el store, loop de reintento del cliente,
-        /// etc.) que no debe ocultarse reintentando indefinidamente.
+        /// MaxConflictRetries veces. Si el límite se agota, la excepción del último
+        /// intento sube sin capturarse — un choque tan persistente probablemente
+        /// indica un problema más profundo (bug en el store, loop de reintento del
+        /// cliente, etc.) que no debe ocultarse reintentando indefinidamente.
         /// </summary>
         private async Task<PolicyVersion> AppendWithRetryAsync(
             Func<PolicyVersion> buildVersionWithoutNumber,
@@ -129,11 +130,15 @@ namespace FeVall.Abac.Engine.Dynamic
                 }
             }
 
-            var finalVersion = await ComputeNextVersionAsync(policyId, ct);
-            var finalAttempt = buildVersionWithoutNumber() with { Version = finalVersion };
-            await _versionStore.AppendAsync(finalAttempt, ct);
-            await _notifier.PublishInvalidationAsync(policyId, ct);
-            return finalAttempt;
+            // Inalcanzable en runtime: en el último intento (attempt == MaxConflictRetries),
+            // el filtro `when (attempt < MaxConflictRetries)` es false, así que
+            // PolicyVersionConflictException sale del método sin pasar por el catch —
+            // nunca llega aquí. Se documenta con throw explícito en vez de dejar un
+            // bloque de "último intento" que en la práctica nunca protege nada.
+            throw new UnreachableException(
+                $"AppendWithRetryAsync para '{policyId}' no debería llegar aquí: " +
+                "el PolicyVersionConflictException del intento final se propaga sin " +
+                "capturar (when (attempt < MaxConflictRetries) es false en ese intento).");
         }
 
         private async Task<int> ComputeNextVersionAsync(string policyId, CancellationToken ct)

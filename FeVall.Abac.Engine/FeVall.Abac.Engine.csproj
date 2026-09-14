@@ -21,11 +21,24 @@
       <_Parameter1>FeVall.Abac.Tests</_Parameter1>
     </AssemblyAttribute>
     <ProjectReference Include="..\FeVall.Abac.Abstractions\FeVall.Abac.Abstractions.csproj" />
+    <ProjectReference Include="..\FeVall.Abac.Analyzers\FeVall.Abac.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                       ReferenceOutputAssembly="false" />
   </ItemGroup>
  
 
   <ItemGroup>
     <Folder Include="Dynamic\Conditions\" />
+  </ItemGroup>
+ 
+
+  <ItemGroup>
+    <EditorConfigFiles Remove="C:\Users\fvall\source\project\FeVall.Abac\FeVall.Abac.Engine\.editorconfig" />
+  </ItemGroup>
+ 
+
+  <ItemGroup>
+    <None Include="C:\Users\fvall\source\project\FeVall.Abac\FeVall.Abac.Engine\.editorconfig" />
   </ItemGroup>
 
 </Project>
