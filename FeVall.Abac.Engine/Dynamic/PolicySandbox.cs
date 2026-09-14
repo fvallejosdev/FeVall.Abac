@@ -1,5 +1,6 @@
 ﻿using FeVall.Abac.Abstractions;
 using FeVall.Abac.Abstractions.Dynamic;
+using System.Diagnostics;
 
 // FeVall.Abac.Engine/Dynamic/PolicySandbox.cs
 namespace FeVall.Abac.Engine.Dynamic
@@ -80,12 +81,23 @@ namespace FeVall.Abac.Engine.Dynamic
                 // CompiledPolicy ya expone Trace en la Decision — lo reutilizamos tal cual.
                 var decision = await compiled.EvaluateAsync(context, ct);
 
+                // En Deny, Decision.Trace ya viene poblado (explainOnDeny:true
+                // forzado en Compile()) — se reutiliza sin recalcular. En Permit,
+                // Decision.Trace es null porque CompiledPolicy solo lo construye
+                // en el camino de Deny; aquí se reconstruye explícitamente vía
+                // IExplainablePolicy para que el sandbox tenga visibilidad
+                // completa en AMBOS efectos, que es su propósito documentado.
+                var trace = decision.Trace ?? (compiled is IExplainablePolicy explainable
+                                    ? explainable.Explain(context)
+                                    : null);
+
+
                 return new PolicyTestCaseResult
                 {
                     CaseIndex = index,
                     DecisionEffect = decision.Effect.ToString(),
                     Reason = decision.Reason,
-                    Trace = decision.Trace
+                    Trace = trace
                 };
             }
             catch (Exception ex)

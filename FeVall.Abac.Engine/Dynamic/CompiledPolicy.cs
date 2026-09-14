@@ -10,7 +10,7 @@ namespace FeVall.Abac.Engine.Dynamic
     /// existente ya sabe cómo tratar esto (ShouldSkip), sin ningún cambio adicional.
     /// internal sealed: solo se construye desde JsonPolicyCompiler.
     /// </summary>
-    internal sealed class CompiledPolicy : IPolicy, IPolicyApplicability
+    internal sealed class CompiledPolicy : IPolicy, IPolicyApplicability, IExplainablePolicy
     {
         private readonly IConditionNode? _target;
         private readonly IConditionNode _rule;
@@ -90,5 +90,19 @@ namespace FeVall.Abac.Engine.Dynamic
             }
         }
 
-    }
+        /// <summary>
+        /// Reconstruye el trace sin importar el efecto — a diferencia de
+        /// BuildDenyDecision, que solo se invoca desde el camino de Deny.
+        /// Reutiliza IExplainableConditionNode, el mismo mecanismo interno
+        /// que ya usa BuildDenyDecision, solo que sin la condición "solo si Deny".
+        /// </summary>
+        public ConditionTrace Explain(IEvaluationContext context) =>
+        _rule is IExplainableConditionNode explainable
+                        ? explainable.Explain(context)
+                        : new ConditionTrace
+                        {
+                            IsSatisfied = _rule.IsSatisfiedBy(context),
+                            Description = "Nodo no explicable (IConditionNode custom sin IExplainableConditionNode)."
+                        };
+        }
 }
